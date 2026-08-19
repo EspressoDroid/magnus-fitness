@@ -30,7 +30,28 @@
       const link = event.target.closest('a[href^="#"]'); const hash = link?.getAttribute('href');
       if (hash && hash !== '#' && goToHash(hash)) { event.preventDefault(); history.replaceState(null, '', hash); }
     });
-    if (location.hash) requestAnimationFrame(() => goToHash(location.hash, 'auto'));
+    // Links from the service detail pages use ?go= instead of a normal hash.
+    // That stops the browser restoring an old scroll position after navigation.
+    const goTarget = new URLSearchParams(location.search).get('go');
+    const initialHash = goTarget ? '#' + goTarget : location.hash;
+    if (goTarget && document.getElementById(goTarget)) {
+      history.replaceState(null, '', location.pathname + initialHash);
+    }
+    const placeInitialTarget = () => {
+      if (!initialHash || !document.getElementById(initialHash.slice(1))) return;
+      // Run after the page has fully laid out, then repeat one frame later in
+      // case the browser's history-restoration pass runs after the first jump.
+      requestAnimationFrame(() => {
+        goToHash(initialHash, 'auto');
+        requestAnimationFrame(() => goToHash(initialHash, 'auto'));
+      });
+    };
+    if (initialHash) {
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+      if (document.readyState === 'complete') placeInitialTarget();
+      else window.addEventListener('load', placeInitialTarget, { once: true });
+      window.addEventListener('pageshow', placeInitialTarget, { once: true });
+    }
 
     document.querySelectorAll('[data-lightbox]').forEach((button) => button.addEventListener('click', () => {
       const box = document.createElement('div'); box.className = 'lightbox'; box.setAttribute('role', 'dialog');
@@ -59,5 +80,8 @@
     document.querySelectorAll('[data-luxury-title]').forEach((title) => gsap.fromTo(title, { clipPath: 'inset(0 0 100% 0)', y: 36 }, { clipPath: 'inset(0 0 0% 0)', y: 0, duration: .85, ease: 'power4.out', scrollTrigger: { trigger: title, start: 'top 84%', once: true } }));
     document.querySelectorAll('.section-layer').forEach((section) => gsap.fromTo(section, { '--luxury-edge': 0 }, { '--luxury-edge': 1, ease: 'none', scrollTrigger: { trigger: section, start: 'top 86%', end: 'top 32%', scrub: true } }));
     ['za-nas','treninzi','raspored','clenarini','kontakt'].forEach((id) => { const section = document.getElementById(id); const link = [...document.querySelectorAll('.site-header nav a')].find((item) => item.getAttribute('href') === '#' + id); if (section && link) ScrollTrigger.create({ trigger: section, start: 'top 48%', end: 'bottom 48%', onToggle: (self) => link.classList.toggle('is-active', self.isActive) }); });
-    if (matchMedia('(hover: hover)').matches) document.querySelectorAll('.program-card, .gallery-image, .combat-image').forEach((element) => { const xTo = gsap.quickTo(element, 'x', { duration: .38, ease: 'power3.out' }); const yTo = gsap.quickTo(element, 'y', { duration: .38, ease: 'power3.out' }); element.addEventListener('pointermove', (event) => { const rect = element.getBoundingClientRect(); xTo(((event.clientX - rect.left) / rect.width - .5) * 7); yTo(((event.clientY - rect.top) / rect.height - .5) * 7); }); element.addEventListener('pointerleave', () => { xTo(0); yTo(0); }); });
+    // Service cards own their hover transform in CSS. Keeping them out of
+    // this GSAP cursor-motion loop prevents an inline transform from leaving
+    // a card enlarged on the first hover.
+    if (matchMedia('(hover: hover)').matches) document.querySelectorAll('.gallery-image, .combat-image').forEach((element) => { const xTo = gsap.quickTo(element, 'x', { duration: .38, ease: 'power3.out' }); const yTo = gsap.quickTo(element, 'y', { duration: .38, ease: 'power3.out' }); element.addEventListener('pointermove', (event) => { const rect = element.getBoundingClientRect(); xTo(((event.clientX - rect.left) / rect.width - .5) * 7); yTo(((event.clientY - rect.top) / rect.height - .5) * 7); }); element.addEventListener('pointerleave', () => { xTo(0); yTo(0); }); });
   })();
